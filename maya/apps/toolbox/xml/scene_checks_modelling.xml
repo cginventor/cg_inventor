@@ -1,0 +1,24 @@
+<scene_checker>
+    <set title="General">
+        <check> freezeTransforms </check>
+        <check> nonDeletedHistory </check>
+        <check> centeredPivots </check>
+        <check> unknownNodes </check>
+    </set>
+    <set title="Mesh">
+        <check> triangles </check>
+        <check> nsided </check>
+        <check> fivePointers </check>
+        <check> holed </check>
+        <check> zeroLengthEdges </check>
+        <check> zeroAreaFaces </check>
+        <check> lockedNormals </check>
+        <check> hardEdges </check>
+        <check> unconnectedIntermediates </check>
+        <check> emptyMeshes </check>
+    </set>
+    <set title="Texturing">
+        <check> unusedShaders </check>
+        <check> uvsOutOfBounds </check>
+    </set>
+</scene_checker>

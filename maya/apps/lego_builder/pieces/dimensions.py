@@ -1,0 +1,60 @@
+from maya.cmds import currentUnit
+import math
+
+current_unit = currentUnit(l=True, q=True)
+
+SCALE_MULT = 1
+if current_unit == 'm':
+    SCALE_MULT = 0.01
+elif current_unit == 'cm':
+    SCALE_MULT = 0.1
+    
+#--------------------------------------------------------------------------------------------------#
+
+UNIT = 8.0
+UNIT_OFFSET = 0.1
+
+WALL_THICKNESS = 1.15
+
+KNOB_RADIUS = 2.45
+KNOB_DIAMETER = KNOB_RADIUS * 2.0
+KNOB_HOLLOW_RADIUS = 1.6
+KNOB_HOLLOW_DIAMETER = KNOB_HOLLOW_RADIUS * 2.0
+KNOB_HEIGHT = 1.8
+KNOB_EDGE_BORDER  = (UNIT - KNOB_DIAMETER) / 2.0
+KNOB_SUBDIVISIONS = 16 
+UNDER_KNOB_RADIUS = 1.3
+UNDER_KNOB_DIAMETER = UNDER_KNOB_RADIUS * 2.0
+UNDER_KNOB_HEIGHT = WALL_THICKNESS
+
+AXEL_RADIUS = 2.4 
+
+HOLE_RADIUS = AXEL_RADIUS + 0.05
+HOLE_BORDER_RADIUS = HOLE_RADIUS + 0.675
+HOLE_BORDER_DEPTH = KNOB_HEIGHT / 2.0
+HOLE_THICKNESS = 0.6
+
+HOLE_HEIGHT_OFFSET = 5.8
+
+HEIGHT = 9.6
+SMALL_HEIGHT = HEIGHT / 3.0
+
+SMOOTH_OFFSET = 0.2
+SMOOTH_45_OFFSET = SMOOTH_OFFSET * math.cos(math.radians(45))
+
+CYLINDER_INNER_RADIUS = 2.45
+CYLINDER_OUTER_RADIUS = 3.205
+
+SMALL_CYLINDER_INNER_RADIUS = 0.695
+SMALL_CYLINDER_OUTER_RADIUS = 1.45
+
+RIDGE_WIDTH = 0.3
+RIDGE_LENGTH = 0.6
+
+STRUT_WIDTH = 0.8
+STRUT_HEIGHT_OFFSET = 3.0
+
+CONNECTOR_MID_WIDTH = HOLE_BORDER_RADIUS - 0.1
+CONNECTOR_END_WIDTH = AXEL_RADIUS + 0.2
+
+#--------------------------------------------------------------------------------------------------#

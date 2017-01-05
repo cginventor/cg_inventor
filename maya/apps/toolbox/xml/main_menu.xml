@@ -1,0 +1,42 @@
+<menu title="Main Menu">
+    <group title="Modelling">
+        <item title="Scene Checker">
+            <data> ModellingChecks </data>
+            <icon> :logos/quality.png </icon>
+        </item>
+        <item title="Naming Tools">
+            <data> NamingTools </data>
+            <icon> :logos/keyboard.png </icon>
+        </item>
+        <item title="Symmetry">
+            <data> Symmetry </data>
+        </item>
+        <item title="Edge Flow">
+            <data> EdgeFlow </data>
+        </item>
+    </group>
+    <group title="Rigging">
+        <item title="Scene Checker">
+            <data> RiggingChecks </data>
+        </item>
+        <item title="Set Management">
+            <data> RiggingChecks </data>
+            <icon> :logos/sets.png </icon>
+        </item>
+        <item title="Skin Clusters">
+            <data> SkinClusters </data>
+        </item>
+        <item title="Picker">
+            <data> Picker </data>
+        </item>
+    </group>
+    <group title="Games">
+        <item title="Tetris">
+            <data> Tetris </data>
+            <icon> :logos/tetris.png </icon>
+        </item>
+        <item title="Solitare">
+            <data> Solitare </data>
+        </item>
+    </group>
+</menu>
