@@ -89,7 +89,7 @@ def getSymmetry(center_edge, sets=True, sides=False, mirrors=False):
         if l_face_list.length() != 2: continue
         f1, f2 = l_face_list   
         
-        # get the face that hasnt been checked from the edge epansion
+        # get the face that hasnt been checked from the edge expansion
         #
         # if first face hasnt been checked and second has, set first
         if checked_polys[f1] == -1 and checked_polys[f2] != -1:

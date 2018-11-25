@@ -1,0 +1,5 @@
+LEFT = 'L'
+CENTER = 'C'
+RIGHT = 'R'
+
+SIDES = [LEFT, CENTER, RIGHT]

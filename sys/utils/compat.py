@@ -17,7 +17,8 @@ if python2:
     from ConfigParser import SafeConfigParser as ConfigParser
     from ConfigParser import Error as ConfigParserError
 
-    from StringIO import StringIO    
+    from StringIO import StringIO
+    
 else:
     StringTypes = (str,)
     UnicodeType = str
@@ -31,8 +32,23 @@ else:
 
 #--------------------------------------------------------------------------------------------------#
 
-if python2 and python_version[1] >= 7:    
-    from functools import total_ordering    
+def toByteString(n):
+    if python2:
+        return chr(n)
+    else:
+        return bytes((n,))
+
+
+def byteiter(bites):
+    assert(isinstance(bites, str if python2 else bytes))
+    for b in bites:
+        yield b if python2 else bytes((b,))
+
+#--------------------------------------------------------------------------------------------------#
+
+if python2 and python_version[1] < 7:
+    from functools import total_ordering
+    
 else:
     def total_ordering(cls):
         convert = {'__lt__': [('__gt__', lambda self, other: other < self),
