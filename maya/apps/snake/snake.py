@@ -4,13 +4,8 @@ import PySide2.QtCore as qc
 import PySide2.QtGui as qg
 import PySide2.QtWidgets as qw
 
-from collections import OrderedDict
-
-from weakref import proxy
-
 # ------------------------------------------------------------------------------------------------ #
 
-BACKGROUND_COLOUR = (128, 175, 1)
 MAIN_COLOUR = qg.QColor(18,30,0)
 SHADOW_COLOUR = qg.QColor(18,30,0,150)
 
@@ -19,148 +14,198 @@ SHADOW_BRUSHES = [qg.QPen(SHADOW_COLOUR), qg.QBrush(SHADOW_COLOUR)]
 
 # ------------------------------------------------------------------------------------------------ #
 
-class Snake2(qw.QDialog):
-    ''' Main Game Window. Defines game panels and connections. '''
-    TITLE = 'SNAKE II'
-     
+class Game(qw.QDialog):
+    '''Main Game Window. Has functions for adding and connection levels.'''
+
+    TITLE = 'GAME'
+    WIDTH = 452
+    HEIGHT = 324
+
     def __init__(self):
         qw.QDialog.__init__(self)
-        self.setWindowTitle('SNAKE II')
+        self.setWindowTitle(self.TITLE)
         qw.QDialog.setWindowFlags(self, qc.Qt.WindowStaysOnTopHint)
+
         self.setLayout(qw.QVBoxLayout())
-        self.layout().setContentsMargins(0,0,0,0)
+        self.layout().setContentsMargins(0, 0, 0, 0)
         self.layout().setSpacing(0)
-        self.setFixedWidth(452)
-        self.setFixedHeight(324)
-        
-        self.setStyleSheet('background-color: rgb{};'.format(BACKGROUND_COLOUR))
-        
+
+        self.setFixedWidth(self.WIDTH)
+        self.setFixedHeight(self.HEIGHT)
+
         self.widget_stack = qw.QStackedWidget()
         self.layout().addWidget(self.widget_stack)
-        
-        self.title_panel = Title()
-        self.main_menu_panel = Menu()
-        self.level_menu_panel = Menu()
-        self.game_panel = Game(100)
-        
-        self.title_panel.addLink(self.main_menu_panel)
-        
-        menu_items = OrderedDict([('New Game', self.game_panel), 
-                                  ('Level', self.level_menu_panel),
-                                  ('High Scores', None),
-                                  ('Options', None)])
-        
-        self.main_menu_panel.initialize(menu_items)
-        
-        level_items = OrderedDict([('Slowest', self.main_menu_panel), 
-                                   ('Slow'   , self.main_menu_panel),
-                                   ('Normal' , self.main_menu_panel),
-                                   ('Fast'   , self.main_menu_panel),
-                                   ('Fastest', self.main_menu_panel)])
-    
-        self.level_menu_panel.initialize(level_items)        
-        
-        self.widget_stack.addWidget(self.title_panel)
-        self.widget_stack.addWidget(self.main_menu_panel)
-        self.widget_stack.addWidget(self.game_panel)
-        self.widget_stack.addWidget(self.level_menu_panel)
-        
-        self.connect(self.title_panel, qc.SIGNAL('panelChanged(int)'), self.menuSwitchPanel)
-        self.connect(self.main_menu_panel, qc.SIGNAL('panelChanged(int)'), self.menuSwitchPanel)
-        
-    
-    def menuSwitchPanel(self, panel_index):
-        current_widget = self.widget_stack.currentWidget()
-        for index in range(self.widget_stack.count()):
-            widget = self.widget_stack.widget(index)
-            if panel_index != widget.panel_id:
-                continue
-            
-            current_widget.end()            
-            self.widget_stack.setCurrentWidget(widget)
-            widget.start()
-            break
-        
-    
+
+        # level information
+        #
+        self._levels = {}
+        self._types = {}
+        self._connections = {}
+
+
+    def setBackgroundColor(self, r, g, b):
+        self.setStyleSheet('background-color: rgb({}, {}, {});'.format(r, g, b))
+
+
+    def register(self, type_name, level_class):
+        '''Register a new level type.'''
+
+        self._types[type_name] = level_class
+
+
+    def addLevel(self, level_type):
+        '''Add a new level to the game. Creates the level based on type, add and connects.'''
+
+        # get level class from registered level types
+        #
+        level_class = self._types.get(level_type, None)
+        new_level = level_class()
+        self.widget_stack.addWidget(new_level)
+        self.connect(new_level, qc.SIGNAL('switchLevel(int, int)'), self._switch)
+
+        # store new level against level id for reference
+        #
+        self._levels[new_level.id] = new_level
+
+        return new_level
+
+
+    def addConnection(self, src_level, signal_id, dst_level):
+        '''Define connections between levels.'''
+        # get level connections. Create dictionary if first connection
+        #
+        level_connections = self._connections.get(src_level.id, None)
+        if level_connections is None:
+            level_connections = self._connections[src_level.id] = {}
+
+        # store the connection to the level
+        #
+        level_connections[signal_id] = dst_level.id
+
+
+    def _switch(self, current_level_id, signal_id):
+        '''Switch to another level based on predefined connections.'''
+
+        # end current level
+        #
+        current_level = self._levels[current_level_id]
+        current_level.end()
+
+        # get next level from connections
+        #
+        next_level_id = self._connections[current_level_id][signal_id]
+
+        # display next level and start
+        #
+        next_level = self._levels[next_level_id]
+        self.widget_stack.setCurrentWidget(next_level)
+        next_level.start()
+
+
     def keyPressEvent(self, event):
+        '''Feed key press events to current widget. Otherwise signal goes to main window and is lost.'''
+
         current_widget = self.widget_stack.currentWidget()
-        return current_widget.keyPressEvent(event)      
-    
-    
-    def __del__(self):
-        print 'deleting'                  
+        return current_widget.keyPressEvent(event)
+
+
+
+class GameData(object):
+    def __init__(self):
+        self.speed_level = 3
+
+
+
+class Snake2(Game):
+    TITLE = 'SNAKE II'
+    WIDTH = 452
+    HEIGHT = 324
+
+    BACKGROUND_COLOUR = (128, 175, 1)
+
+    MENU = 'menu'
+    TITLE = 'title'
+    ARENA = 'arena'
+     
+    def __init__(self):
+        Game.__init__(self)
+        
+        self.setBackgroundColor(*self.BACKGROUND_COLOUR)
+
+        self.registered_level_types = {}
+        self.levels = {}
+
+        # register level types
+        #
+        self.register(self.TITLE, Title)
+        self.register(self.MENU, Menu)
+        self.register(self.ARENA, Arena)
+
+        # add levels
+        #
+        main_title = self.addLevel(self.TITLE)
+        main_menu = self.addLevel(self.MENU)
+        level_menu = self.addLevel(self.MENU)
+        arena = self.addLevel(self.ARENA)
+
+        # connect levels together
+        #
+        self.addConnection(main_title, 0, main_menu)
+
+        self.addConnection(main_menu, 0, arena)
+        self.addConnection(main_menu, 1, level_menu)
+
+        self.addConnection(level_menu, 0, main_menu)
+
+        # setup menus
+        #
+        menu_items = [('New Game', 0),
+                      ('Level', 1),
+                      ('High Scores', 1),
+                      ('Options', 1)]
+        main_menu.initialize(menu_items)
+
+        menu_items = [('Slowest', 0),
+                      ('Slow', 0),
+                      ('Normal', 0),
+                      ('Fast', 0),
+                      ('Fastest', 0)]
+        level_menu.initialize(menu_items)
             
 # ------------------------------------------------------------------------------------------------ #
 
-class Panel(qw.QWidget):
-    panel_id = 0
+class Level(qw.QWidget):
+    id = 0
     
     def __init__(self):
         qw.QWidget.__init__(self)        
         self.width, self.height = 452, 324
-        self.panel_id = Panel.panel_id
-        Panel.panel_id += 1
-        
-        self.current_index = 0
-        self.links = {}    
-    
-    
-    @staticmethod
-    def clear():
-         Panel.panels = {}
-        
-    
-    def addLink(self, widget):
-        if widget:
-            self.links[self.current_index] = proxy(widget)
-        self.current_index += 1
-        
-        
+        self.id = Level.id
+        Level.id += 1
+
+
+    def reset(self):
+        pass
+
+
     def start(self):
         pass
-    
-    
+
+
     def end(self):
         pass
-        
-        
-    def emitPanelChange(self, index):
-        next_panel = self.links.get(index, None)
-        if not next_panel:
-            return 
-        
-        self.emit(qc.SIGNAL('panelChanged(int)'), next_panel.panel_id)
-        
-    
-    def __del__(self):
-        print 'deleting panel'
+
+
+    def switch(self, index):
+        self.emit(qc.SIGNAL('switchLevel(int, int)'), self.id,  index)
         
 # ------------------------------------------------------------------------------------------------ #
- 
+
 def new_uncompress(image_str, width):
     lines = []
     for line in image_str.split('-'):
         lines.append(int(line, 16))
     return lines
-
-# TITLE_IMAGE = (95, 76, \
-# 'c00000000000000c00007-1e00000004030001e000f9-7e0000f01c070087e00f81-fe0381f07e1f01cff1f801-1ff1f'\
-# '81f0fe3f03efff0001-3ff1f81f0fe3f03f7f8000f-7ff1fc3f1fe1f87ef20031f-ffe1fc3e1fe1f8fde201f18-ff01f'\
-# 'e3e3ff039fb8301f18-1fe03fe3e3ef0bbf781f1918-1f803fe3e3cf3bff780f1918-3f003ff3e7cffdfe78811918-3e'\
-# '001ef3e7c7fdfc7bc11918-7c0fcefbef87fdf83fc11918-7cffee7bef8ff1f83e011918-7fffee7fefbfc7fc3c01191'\
-# 'f-7fffee3fefffc7fe1c711919-3f07ee1fdfffe7ff1cf11e01-fee1fdfe3e7df9ff11801-1fde0fdf03e7cf8fe7000f'\
-# '-3fde0e1f0103c70f98007f-ffbe007f007bc20f1003f8-3ff78007e01c84004101fc0-1ffe600008030f000018fe00-'\
-# '1ffc000003de71f8000ff000-1ff000000630c00c00078000-1fc000000589c00400020000-f00000006c2d006000000'\
-# '00-c00007ffad423c200000000-3d55719868300000000-1eaabc0000c100000000-f555e000004300000000-7aaabff'\
-# 'f001ffc0000000-d555f8008ff1578000000-1aabf0c003901aac000000-355e00700d303556000000-2ff3802ff9607'\
-# 'ebff80000-3af6802585c0c1e00e0000-775d801583818700038700-68eb000d83031c00009880-1d47580038606300f'\
-# 'f07040-7aaffe0068c0c607eb86c20-d55f5ffe89818c1cd682610-1afaabaaa130318376ac3f08-15dd555560606306'\
-# 'c5742788-1beaaaaae0c0c20d1ebeb086-15555555c181861b7d7d3ec5-1aeaffbf430304323ffafcc5-157fe4e24606'\
-# '042343ffc1c2-ebfe4828c0cf431a0000ae2-75ff57b0819f419500035e3-ebf2085833f60cbf00fbe1-75fc6f9067f3'\
-# '0651ff95f1-11afaafb04ff98320002bf1-fcd6327a0cffcc1900055f1-3fe6b7f7a0c7fe64c8001bf1-7ff35f57a0f1'\
-# 'ff344781f671-7ff9afb7a09c0f1868ff2b31-7ffcd7e7b007e07024009692-7ffe77cf98003fc028002c7c-3ffe031f'\
-# 'cc0000006f81f001-ffffb9fe7800000c0ff07ff-1fffbcff0f800079e007ff8-1ffd2ffe0ffffc3fffff80-0-0-0-0-'\
-# 'eeeee1d5ddc000000-aa88811c914000000-eeeee19c99c000000-8c822114918000000-8aeee1d49d4000000-0-0-0')
 
 TITLE_IMAGE = (95, 76, \
 '700001800000000000001800-4f8003c00060100000003c00-40f803f080701c0780003f00-400fc7f9c07c3f07c0e03'\
@@ -181,11 +226,11 @@ TITLE_IMAGE = (95, 76, \
 'f8-fff003cf0000f87f9efffc0-fffffe1ffff83ffa5ffc00-0-0-0-0-1ddd5c3bbbb8000000-1449c4088aa8000000-'\
 '1cc9cc3bbbb8000000-c4944220988000000-15c95c3bba88000000-0-0-0')
 
-class Title(Panel):
+class Title(Level):
     title_image = new_uncompress(TITLE_IMAGE[2], TITLE_IMAGE[0])
     
     def __init__(self):
-        Panel.__init__(self)
+        Level.__init__(self)
         
         self.x_offset = (self.width - (TITLE_IMAGE[0] * 4)) / 2
         self.y_offset = (self.height - (TITLE_IMAGE[1] * 4)) / 2
@@ -193,44 +238,32 @@ class Title(Panel):
     
     def paintEvent(self, event):
         painter = qw.QStylePainter(self)
-        option  = qw.QStyleOption()
+        option = qw.QStyleOption()
         option.initFrom(self)
      
         x = option.rect.x() + self.x_offset
         y = option.rect.y() + self.y_offset
         
-        for index, color in enumerate((MAIN_BRUSHES, SHADOW_BRUSHES)):
+        for color in (MAIN_BRUSHES, SHADOW_BRUSHES):
             x += 1
             y += 1
             
             painter.setPen(color[0])
             painter.setBrush(color[1])
-            
-            for i in range(TITLE_IMAGE[1]):
-                check = 1
-                line = Title.title_image[i]
-                for j in range(TITLE_IMAGE[0]):
-                    if line & check:
-                        gx, gy = x + (j*3) + 1 + j, y + (i*3) + 1 + i
-                        painter.drawRect(gx, gy, 2, 2)
-                    check <<= 1
-            #drawGrid(painter, x, y, title)
-            
+
+            drawImage(painter, x, y, TITLE_IMAGE)
+
 
     def keyPressEvent(self, event):
-        self.emitPanelChange(0)
-    
-    
-    def __del__(self):
-        print 'deleting title'
+        self.switch(0)
                     
 # ------------------------------------------------------------------------------------------------ #  
 
-class Menu(Panel):
+class Menu(Level):
     menu_id = 0
     
     def __init__(self):
-        Panel.__init__(self)
+        Level.__init__(self)
         self.menu_id = Menu.menu_id
         Menu.menu_id += 1
         
@@ -240,24 +273,32 @@ class Menu(Panel):
         self.selected_index = 0
         
         self.menu_items = []
+        self.menu_signals = []
         self.menu_item_grids = {}
                 
     
     def initialize(self, menu_items):
-        self.menu_items = menu_items.keys()
+        '''Setup the menu with given items and signal connections. Should be pairs of text:signal_id.'''
+
+        self.menu_items = []
+        self.menu_signals = []
         self.menu_item_grids = {}
-        for menu_item_name, panel in menu_items.items():
-            self.addLink(panel)
-             
+
+        # add each menu item to menu as fancy text
+        #
+        for menu_item_name, signal_id in menu_items:
+            self.menu_items.append(menu_item_name)
+            self.menu_signals.append(signal_id)
+
             grids = [[0 for _ in range(self.menu_item_width)] for _ in range(16)]
             self.menu_item_grids[menu_item_name] = grids
              
             indent = [4, 3]
             for letter in menu_item_name:
                 letter_grid = font[letter]
-                grid_width = len(letter_grid[0])
-                for index, row in enumerate(letter_grid):
-                    grids[index+indent[1]][indent[0]:indent[0]+grid_width] = row
+                grid_width = letter_grid[0]
+                for i, row in enumerate(letter_grid):
+                    grids[i + indent[1]][indent[0]:indent[0]+grid_width] = row
                 indent[0] += grid_width + 1
                 
                 
@@ -278,18 +319,18 @@ class Menu(Panel):
             self.repaint()
             
         elif key in (qc.Qt.Key_Return, qc.Qt.Key_Enter):
-            self.emitPanelChange(self.selected_index)           
+            self.switch(self.menu_signals[self.selected_index])
         
         
     def paintEvent(self, event):
         painter = qw.QStylePainter(self)
-        option  = qw.QStyleOption()
+        option = qw.QStyleOption()
         option.initFrom(self)
      
         x = option.rect.x() + 24
         y = option.rect.y() + 24
         
-        for index, color in enumerate((MAIN_BRUSHES, SHADOW_BRUSHES)):
+        for color in (MAIN_BRUSHES, SHADOW_BRUSHES):
             x += 1
             y += 1
             
@@ -297,20 +338,16 @@ class Menu(Panel):
             painter.setBrush(color[1])            
             
             w_y = y
-            for menu_item in self.menu_items:
+            for i, menu_item in enumerate(self.menu_items):
                 menu_item_grid = self.menu_item_grids[menu_item]
                 
                 invert = False
-                if self.menu_items.index(menu_item) == self.selected_index:
+                if i == self.selected_index:
                     invert = True
                     
-                drawGrid(painter, x, w_y, menu_item_grid, invert)
+                drawImage(painter, x, w_y, menu_item_grid, invert)
                 
                 w_y += 16 * 4
-                
-                
-    def __del__(self):
-        print 'deleting menu'
                     
 # ------------------------------------------------------------------------------------------------ #
 
@@ -319,11 +356,11 @@ DOWN = (0, 1)
 LEFT = (-1, 0)
 RIGHT = (1, 0)
 
-class Game(Panel):
+class Arena(Level):
     GAME_OVER = 'GAME OVER'
     
-    def __init__(self, snake_speed):
-        Panel.__init__(self)
+    def __init__(self):
+        Level.__init__(self)
         self.setLayout(qw.QVBoxLayout())
         self.layout().setContentsMargins(10,10,10,10)
         self.layout().setSpacing(0)
@@ -332,7 +369,7 @@ class Game(Panel):
         
         self.grid = Grid(self.width/16-2, self.height/16-4)
         
-        self.snake_speed = snake_speed
+        self.snake_speed = 100
         
         self.score_board = ScoreBoard(self.width/16-2)
         self.layout().addWidget(self.score_board)
@@ -340,25 +377,8 @@ class Game(Panel):
         self.ui = GameGrid(self.grid)
         self.layout().addWidget(self.ui)
         
-        self.score_text = ['Game Over!', 'TOP SCORE:', 'SCORE:']        
-        self.score_text_grids = {}
-        
-        for text_item in self.score_text:
-            grids = [[0 for _ in range(100)] for _ in range(16)]
-            self.score_text_grids[text_item] = grids
-            
-            indent = [0, 0]
-            for letter in text_item:
-                letter_grid = font.get(letter, None)
-                if letter_grid is None:
-                    continue
-                
-                grid_width = len(letter_grid[0])
-                for index, row in enumerate(letter_grid):
-                    grids[index+indent[1]][indent[0]:indent[0]+grid_width] = row
-                    
-                indent[0] += grid_width + 1
-        
+        self.score_text = ['Game Over!', 'TOP SCORE:', 'SCORE:']
+
         self.reset()
     
     
@@ -567,7 +587,7 @@ class Game(Panel):
             w_y = y
             for score_text in self.score_text[0:2]:
                 text_grid = self.score_text_grids[score_text]               
-                drawGrid(painter, x, w_y, text_grid)                
+                drawImage(painter, x, w_y, text_grid)                
                 w_y += 16 * 4
                 
             score_str = '{:04d}'.format(self.score_board.score_counter)
@@ -575,7 +595,7 @@ class Game(Panel):
             sx = x
             for index in range(4):
                 score_grid = font[score_str[index]]               
-                drawGrid(painter, sx, w_y, score_grid)
+                drawImage(painter, sx, w_y, score_grid)
                 sx += (len(score_grid[0]) + 1) * 4
         
     
@@ -603,20 +623,18 @@ class GameGrid(qw.QWidget):
     
     def paintEvent(self, event):
         painter = qw.QStylePainter(self)
-        option  = qw.QStyleOption()
+        option = qw.QStyleOption()
         option.initFrom(self)
      
         x = option.rect.x()
         y = option.rect.y()
         height = option.rect.height() - 4
-        width  = option.rect.width() - 4
+        width = option.rect.width() - 4
         
-        for index, color in enumerate((MAIN_BRUSHES, SHADOW_BRUSHES)):
+        for color in (MAIN_BRUSHES, SHADOW_BRUSHES):
             painter.setPen(color[0])
             painter.setBrush(color[1])
-            
-            x += index
-            y += index
+
             for i in range(width):
                 px = x + (i * 4)
                 painter.drawRect(px, y, 2, 2)
@@ -644,13 +662,13 @@ class GameGrid(qw.QWidget):
                     check = 1
                     for gi in range(4):
                         for gj in range(4):
-                            if block_value & check:#(1 << (gj * 4 + gi)):
+                            if block_value & check:
                                 gx, gy = block_x + (gj*3) + 1 + gj, block_y + (gi*3) + 1 + gi
                                 painter.drawRect(gx, gy, 2, 2)
                             check = check << 1
-                    
-                    #drawGrid(painter, block_x, block_y, block.draw())
-                    #drawGrid(painter, block_x, block_y, block_draw)
+
+            x += 1
+            y += 1
                     
     
     def __del__(self):
@@ -658,14 +676,14 @@ class GameGrid(qw.QWidget):
 
 # ------------------------------------------------------------------------------------------------ #
         
-def drawGrid(painter, x, y, grid, invert=False):
-    for i in range(len(grid[0])):
-        for j in range(len(grid)):
-            draw = grid[j][i]
-            if not (draw if not invert else not draw):
-                continue
-            gx, gy = x + (i*3) + 1 + i, y + (j*3) + 1 + j
-            painter.drawRect(gx, gy, 2, 2)
+def drawImage(painter, x, y, image, invert=False):
+    for line in image[1]:
+        check = 1
+        for i in range(image[0]):
+            if line & check:
+                gx, gy = x + (i * 3) + 1 + i, y + (i * 3) + 1 + i
+                painter.drawRect(gx, gy, 2, 2)
+            check <<= 1
 
 # ------------------------------------------------------------------------------------------------ #
 
@@ -686,14 +704,12 @@ class Grid(object):
         
     
     def draw(self):
-        symbols = {Block.FREE:'_', 
-                   Block.HEAD:'&', 
-                   Block.BODY:'#',
-                   Block.TAIL:'^',
-                   Block.CORNER:'%',
-                   Block.APPLE:'O'}
-                
-        rows = []
+        symbols = {Block.FREE: '_',
+                   Block.HEAD: '&',
+                   Block.BODY: '#',
+                   Block.TAIL: '^',
+                   Block.CORNER: '%',
+                   Block.APPLE: 'O'}
         for row_index in range(len(self.columns[0])):
             line = ''
             for column_index in range(len(self.columns)):
@@ -768,20 +784,18 @@ class ScoreBoard(qw.QWidget):
     
     def paintEvent(self, event):
         painter = qw.QStylePainter(self)
-        option  = qw.QStyleOption()
+        option = qw.QStyleOption()
         option.initFrom(self)
      
         x = option.rect.x()
         y = option.rect.y()
         height = option.rect.height() - 8
-        width  = option.rect.width() - 4
+        width = option.rect.width() - 4
         
-        for index, color in enumerate((MAIN_BRUSHES, SHADOW_BRUSHES)):
+        for color in (MAIN_BRUSHES, SHADOW_BRUSHES):
             painter.setPen(color[0])
             painter.setBrush(color[1])
             
-            x += index
-            y += index
             for i in range(width):
                 painter.drawRect(x + (i * 4), y + height, 2, 2)
                 
@@ -796,6 +810,9 @@ class ScoreBoard(qw.QWidget):
                             continue
                         gx, gy = sx + (i*4), y + (j*4)
                         painter.drawRect(gx, gy, 2, 2)
+
+            x += 1
+            y += 1
                         
     def __del__(self):
         print 'deleting scoreboard'
@@ -835,12 +852,11 @@ class Block(object):
     BONUS_D_1 = 0x5dfc
     BONUS_D_2 = 0xabf3
 
-    DRAW = {BODY: {LEFT:0xbd0, RIGHT:0xdb0, UP:0x6246, DOWN:0x6426},
-    #DRAW = {BODY: {LEFT:0xdb0, RIGHT:0xbd0, UP:0x6426, DOWN:0x6246},
-            HEAD: {LEFT:0xe68, RIGHT:0x761, UP:0xa660, DOWN:0x66a},
-            HEAD_OPEN: {LEFT:0x2c4a, RIGHT:0x4325, UP:0x5690, DOWN:0x965},
-            TAIL: {LEFT:0xf30, RIGHT:0xfc0, UP:0x4466, DOWN:0x6644},
-            CORNER: {LEFT:0xca6, RIGHT:0x356, UP:0x6ac0, DOWN:0x6530}}
+    DRAW = {BODY: {LEFT: 0xbd0, RIGHT: 0xdb0, UP: 0x6246, DOWN: 0x6426},
+            HEAD: {LEFT: 0xe68, RIGHT: 0x761, UP: 0xa660, DOWN: 0x66a},
+            HEAD_OPEN: {LEFT: 0x2c4a, RIGHT: 0x4325, UP: 0x5690, DOWN: 0x965},
+            TAIL: {LEFT: 0xf30, RIGHT: 0xfc0, UP: 0x4466, DOWN: 0x6644},
+            CORNER: {LEFT: 0xca6, RIGHT: 0x356, UP: 0x6ac0, DOWN: 0x6530}}
     
     def __init__(self):
         self.reset()
@@ -913,10 +929,6 @@ def uncompress(image_str):
     return ''.join(output)
 
 
-
-    
-
-
 def splitLetters(keys, font_str, font_width):    
     font_str = uncompress(font_str)
     font = []
@@ -948,43 +960,6 @@ def splitLetters(keys, font_str, font_width):
 # ------------------------------------------------------------------------------------------------ #    
 
 title_width, title_height = 95, 77
-# title = \
-# '!11-2!58-2!19-3!10-4!30-!8-2!15-4!13-5!2-!8-6!17-4!7-3!7-3!8-!4-6!9-5!6-!7-7!7-3!6-5!5-6!4-5!7-3'\
-# '!2-8!3-6!10-!6-9!3-6!6-5!4-7!3-6!6-5!-12!15-!5-10!3-6!6-5!4-7!3-6!6-6!-8!15-4!4-11!3-7!4-6!3-8!4'\
-# '-6!4-6!-4!2-!11-2!3-5!3-11!4-7!4-5!4-8!4-6!3-6!-4!3-!8-5!3-2!6-8!7-8!3-5!3-10!6-3!2-6!-3!5-2!7-5'\
-# '!3-2!5-8!7-9!3-5!3-5!-4!4-!-3!-6!-4!6-5!3-2!2-!3-2!5-6!9-9!3-5!3-4!2-4!2-3!-10!-4!7-4!3-2!2-!3-2'\
-# '!4-6!10-10!2-5!2-5!2-10!-8!2-4!3-!6-!3-2!2-!3-2!4-5!12-4!-4!2-5!2-5!3-9!-7!3-4!-4!5-!3-2!2-!3-2!'\
-# '3-5!6-6!2-3!-5!-5!-5!4-9!-6!5-8!5-!3-2!2-!3-2!3-5!2-11!-3!2-4!-5!-5!3-8!3-6!5-5!8-!3-2!2-!3-2!3-'\
-# '18!-3!2-10!-5!-8!3-9!4-4!9-!3-2!2-!3-23!-3!3-9!-14!3-10!4-3!3-3!3-!3-2!2-!3-2!2-!-6!5-6!-3!4-7!-'\
-# '16!2-11!3-3!2-4!3-!3-4!8-!11-7!-3!4-7!-8!3-5!2-5!-6!2-9!3-!3-2!10-!10-7!-4!5-6!-5!6-5!2-5!2-5!3-'\
-# '7!2-3!12-4!9-8!-4!5-3!4-5!7-!6-4!3-3!4-5!2-2!12-7!7-9!-5!10-7!9-4!-4!4-!5-4!3-!10-7!8-10!-4!12-6'\
-# '!8-3!2-!4-!11-!5-!7-7!8-12!2-2!17-!9-2!4-4!19-2!3-7!11-11!24-4!-4!2-3!3-6!15-8!14-9!25-2!3-2!4-2'\
-# '!10-2!15-4!17-7!27-!-2!3-!2-3!11-!16-!20-4!29-2!-2!4-!-2!-!9-2!36-2!19-12!-!-2!-!-!4-!3-4!4-!54-'\
-# '4!-!-!-!-!-!-3!3-2!2-2!4-2!-!5-2!50-4!-!-!-!-!-!-4!18-2!5-!47-4!-!-!-!-!-!-4!22-!4-2!44-4!-!-!-!'\
-# '-!-!-!-14!11-11!41-2!-!-!-!-!-!-!-6!11-!3-8!3-!-!-!-4!37-2!-!-!-!-!-6!4-2!12-3!2-!7-2!-!-!-!-2!3'\
-# '5-2!-!-!-!-4!10-3!8-2!-!2-2!6-2!-!-!-!-!-2!34-!-8!2-3!9-!-9!2-!-2!6-6!-!-11!28-3!-!-4!-2!-!9-!2-'\
-# '!-2!4-!-3!6-2!5-4!9-3!25-3!-3!-!-3!-2!10-!-!-2!5-3!6-2!4-3!14-3!4-3!16-2!-!3-3!-!-2!12-2!-2!5-2!'\
-# '6-2!3-3!18-!2-2!3-!13-3!-!-!3-3!-!-2!13-3!4-2!6-2!3-2!8-8!5-3!5-!10-4!-!-!-!-11!10-2!-!3-2!6-2!3'\
-# '-2!6-6!-!-3!4-2!-2!4-!8-2!-!-!-!-!-5!-!-12!-!3-!2-2!6-2!3-2!5-3!2-2!-!-2!-!5-!2-2!4-!6-2!-!-5!-!'\
-# '-!-!-!-3!-!-!-!-!-!4-!2-2!6-2!3-2!5-2!-3!-2!-!-!-2!4-6!4-!5-!-!-3!-3!-!-!-!-!-!-!-!-!-!-2!6-2!6-'\
-# '2!3-2!5-2!-2!3-!-!-3!-!4-!2-4!3-!5-2!-5!-!-!-!-!-!-!-!-!-!-!-3!5-2!6-2!4-!5-2!-!3-4!-!-5!-!-2!4-'\
-# '!4-2!3-!-!-!-!-!-!-!-!-!-!-!-!-!-!-3!5-2!6-2!4-2!4-2!-2!-5!-!-5!-!2-5!-2!3-!-!2-2!-!-3!-!-!-9!-6'\
-# '!-!4-2!6-2!5-!4-2!2-!3-11!-!-6!2-2!3-!-!2-!-!-!-10!2-!2-3!3-!2-!3-2!6-2!6-!4-!3-2!-!4-12!5-3!4-!'\
-# '4-3!-!-9!2-!2-!5-!-!3-2!6-2!2-4!-!4-2!3-2!-!17-!-!-3!3-!5-3!-!-9!-!-!-4!-2!4-!6-2!2-5!-!5-2!2-!-'\
-# '!-!14-2!-!-4!3-2!7-3!-!-6!2-!5-!4-!-2!5-2!2-6!-2!5-2!2-!-6!8-5!-5!4-!8-3!-!-7!3-2!-5!2-!5-2!2-7!'\
-# '2-2!5-2!2-!-!3-10!2-!-!-5!3-!6-!3-2!-!-5!-!-!-!-5!-2!5-!2-9!2-2!5-2!2-!15-!-!-6!3-!3-6!2-2!-!-2!'\
-# '3-2!2-!2-4!-!5-2!2-10!2-2!5-2!2-!13-!-!-!-5!3-!-9!2-2!-!-2!-7!-4!-!5-2!3-10!2-2!2-!2-2!2-!14-2!-'\
-# '6!3-12!2-2!-!-5!-!-!-4!-!5-4!3-9!2-2!-!3-!3-4!6-5!-2!2-3!3-13!2-2!-!-5!-2!-4!-!5-!2-3!6-4!3-2!4-'\
-# '2!-!3-8!2-!-!-2!2-2!3-14!2-2!-!-6!2-4!-2!9-6!6-3!6-!2-!10-!2-!-2!-!2-!2-!-14!2-3!-5!2-5!2-2!13-8'\
-# '!8-!-!13-!-2!3-5!3-13!7-2!3-7!2-2!27-2!-5!6-5!11-!3-17!-3!2-8!2-4!23-2!6-8!5-11!6-14!-4!2-8!4-5!'\
-# '16-4!2-4!10-12!13-11!-!2-!-11!5-18!4-23!414-3!-3!-3!-3!-3!4-3!-!-!-3!-3!-3!53-!-!-!-!-!3-!3-!6-!'\
-# '3-3!2-!2-!3-!-!53-3!-3!-3!-3!-3!4-2!2-3!2-!2-2!2-3!53-!3-2!2-!5-!3-!4-!3-!-!2-!2-!3-2!54-!3-!-!-'\
-# '3!-3!-3!4-3!-!-!2-!2-3!-!-!406'
-
-
-
-
-
 
 font_lower_width, font_lower_height = 166, 11
 font_lower = \
@@ -1051,7 +1026,7 @@ def create():
     global ui
     
     if not ui:
-        ui = Snake()
+        ui = Snake2()
     
     ui.show()
     
@@ -1064,3 +1039,97 @@ def delete():
         del(ui)
     
     ui = None
+
+
+# font_lower_width, font_lower_height = 166, 11
+# font_lower = \
+# test = '!6-2!2-4!5-2!-2!10-2!-2!2-3!-3!7-2!-2!2-2!4-2!-2!10-2!-2!-2!5-4!-2!-2!-2!2-2!4-2!-2!10-2!2-!-2!'\
+# '5-4!-2!-2!5-2!3-2!3-2!9-2!4-2!5-2!6-2!3-3!4-2!3-2!9-2!4-2!5-2!6-2!3-2!4-2!5-2!8-2!4-2!5-4!-2!12'\
+# '-2!5-2!8-2!4-2!5-4!-2!-2!3-2!3-2!7-2!-2!-2!-2!4-2!5-2!4-!-2!3-2!3-2!7-2!-2!-2!-2!5-3!-3!30-!68'
+#
+# uncompressed_image = uncompress(test)
+#
+# prev = 0
+# new_image = []
+# for i in range(font_lower_width, len(uncompressed_image), font_lower_width):
+#     new_image.append(hex(int(uncompressed_image[prev:i], 2))[2:-1])
+#     prev = i
+# print '-'.join(new_image)
+
+font_lower_width = 166
+font_lower = '600018018060cd83000000000000180000000000-6000180300600183000000000000180000000000-1e7c7' \
+             '8f9e79e7ccd9b7f3e3cf8f367bd9b36366cdf-366cd9b333366cdb36db366cd9bec199b36366cc6-1f66c19' \
+             'b333366cde36db366cd9b0c199b36366cc6-3366c19bf33366cdc36db366cd9b07199b36b3cccc-3366c19b' \
+             '033366cde36db366cd9b01999926b7eccc-3366cd9b333366cdb36db366cd9b019999e3e66cd8-1f7c78f9e' \
+             '31f66d99b6db33cf8fb0f0cf8c36667df-3000000000000c018000000000000c0'
+
+font_upper_width = 174
+font_upper = '1e7c79f3ef9e66c6cd8828679f1e7c79fb366c6cd9bf-3366cd9b0c3366c6cd8c6c6cd9b366cc63366c6cd9' \
+             '86-3366c19b0c3066c6cd8eee6cd9b366c063366c679986-3366c19bcf3066c6cd8fef6cd9b366c063366d6' \
+             '7998c-3f7cc19b0c307ec6f98d6fecdf337c7863366d630f0c-3366c19b0c3766c6cd8c6decd833660c6336' \
+             '6fe78618-3366c19b0c3366c6cd8c6cecd833660c6333c7c78618-3366cd9b0c3366c6cd8c6c6cd83766cc6' \
+             '333c7ccc630-337c79f3ec1e66dccdec6c27981e667861e186ccc63f-30000000000000000'
+
+font_numbers_width = 70
+font_numbers = '1e31e3c0cfcf3f3c78cdccd9873066cd9b33333366-f30600d9b333333066cf9f0366ccccc1c71303661-' \
+               '23cccccc381b303663999f3331c66cccd98c660ccc-33866fecd98c66cc79efcf031e3c30f1e000000000'
+
+font_symbols_width = 49
+font_symbols = 'cf06c00d9dc06cc36006d83db661b0032c1ed831-23006183031c318030c1818c30601860f60018300c-c' \
+               '1ed8c6036d860c2c6301b6c1dc00000008000000'
+
+
+
+def uncompress_image(image_str, width):
+    lines = []
+    for line in image_str.split('-'):
+        lines.append(int(line, 16))
+    return width, lines
+
+
+def split(image):
+    split_images = []
+    binary_lines = [bin(line)[2:].zfill(image[0]) for line in image[1]]
+
+    check = 1
+    counter = image[0] - 1
+    prev_counter = image[0]
+    for i in range(image[0]):
+        split_line = True
+        for line in image[1]:
+            if line & check:
+                split_line = False
+        check <<= 1
+
+        if split_line is True or i == image[0] - 1:
+            width = prev_counter - counter - (0 if i == image[0] - 1 else 1)
+            split_images.append([width, [int(binary_line[counter:prev_counter], 2) for binary_line in binary_lines]])
+            prev_counter = counter
+        counter -= 1
+
+    return split_images[::-1]
+
+
+def draw(image, x, y, painter, invert=False):
+    for line in image[1]:
+        check = 1
+        line_str = []
+        for _ in range(image[0]):
+            if line & check:
+                line_str.append('H')
+            else:
+                line_str.append('-')
+            check <<= 1
+
+        print ''.join(line_str[::-1])
+
+# font_upper_image = uncompress_image(font_upper, font_upper_height)
+# display(font_upper_image)
+# split_images = split(image)
+# for split_image in split_images:
+#     display(split_image)
+
+#font = dict(zip([chr(index + 97) for index in range(26)], split(uncompress_image(font_lower, font_lower_width))))
+#font.update(dict(zip([chr(index + 65) for index in range(26)], split(uncompress_image(font_upper, font_upper_width)))))
+
+print font
