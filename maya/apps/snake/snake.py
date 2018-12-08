@@ -4,164 +4,81 @@ import PySide2.QtCore as qc
 import PySide2.QtGui as qg
 import PySide2.QtWidgets as qw
 
+from cg_inventor.maya.apps.snake import game; reload(game)
+from cg_inventor.maya.apps.snake import images
+from cg_inventor.maya.apps.snake import font; reload(font)
+
 # ------------------------------------------------------------------------------------------------ #
 
-MAIN_COLOUR = qg.QColor(18,30,0)
-SHADOW_COLOUR = qg.QColor(18,30,0,150)
+MAIN_COLOUR = qg.QColor(18, 30, 0)
+SHADOW_COLOUR = qg.QColor(18, 30, 0, 150)
 
 MAIN_BRUSHES = [qg.QPen(MAIN_COLOUR), qg.QBrush(MAIN_COLOUR)]        
 SHADOW_BRUSHES = [qg.QPen(SHADOW_COLOUR), qg.QBrush(SHADOW_COLOUR)]
 
 # ------------------------------------------------------------------------------------------------ #
 
-class Game(qw.QDialog):
-    '''Main Game Window. Has functions for adding and connection levels.'''
-
-    TITLE = 'GAME'
-    WIDTH = 452
-    HEIGHT = 324
-
-    def __init__(self):
-        qw.QDialog.__init__(self)
-        self.setWindowTitle(self.TITLE)
-        qw.QDialog.setWindowFlags(self, qc.Qt.WindowStaysOnTopHint)
-
-        self.setLayout(qw.QVBoxLayout())
-        self.layout().setContentsMargins(0, 0, 0, 0)
-        self.layout().setSpacing(0)
-
-        self.setFixedWidth(self.WIDTH)
-        self.setFixedHeight(self.HEIGHT)
-
-        self.widget_stack = qw.QStackedWidget()
-        self.layout().addWidget(self.widget_stack)
-
-        # level information
-        #
-        self._levels = {}
-        self._types = {}
-        self._connections = {}
-
-
-    def setBackgroundColor(self, r, g, b):
-        self.setStyleSheet('background-color: rgb({}, {}, {});'.format(r, g, b))
-
-
-    def register(self, type_name, level_class):
-        '''Register a new level type.'''
-
-        self._types[type_name] = level_class
-
-
-    def addLevel(self, level_type):
-        '''Add a new level to the game. Creates the level based on type, add and connects.'''
-
-        # get level class from registered level types
-        #
-        level_class = self._types.get(level_type, None)
-        new_level = level_class()
-        self.widget_stack.addWidget(new_level)
-        self.connect(new_level, qc.SIGNAL('switchLevel(int, int)'), self._switch)
-
-        # store new level against level id for reference
-        #
-        self._levels[new_level.id] = new_level
-
-        return new_level
-
-
-    def addConnection(self, src_level, signal_id, dst_level):
-        '''Define connections between levels.'''
-        # get level connections. Create dictionary if first connection
-        #
-        level_connections = self._connections.get(src_level.id, None)
-        if level_connections is None:
-            level_connections = self._connections[src_level.id] = {}
-
-        # store the connection to the level
-        #
-        level_connections[signal_id] = dst_level.id
-
-
-    def _switch(self, current_level_id, signal_id):
-        '''Switch to another level based on predefined connections.'''
-
-        # end current level
-        #
-        current_level = self._levels[current_level_id]
-        current_level.end()
-
-        # get next level from connections
-        #
-        next_level_id = self._connections[current_level_id][signal_id]
-
-        # display next level and start
-        #
-        next_level = self._levels[next_level_id]
-        self.widget_stack.setCurrentWidget(next_level)
-        next_level.start()
-
-
-    def keyPressEvent(self, event):
-        '''Feed key press events to current widget. Otherwise signal goes to main window and is lost.'''
-
-        current_widget = self.widget_stack.currentWidget()
-        return current_widget.keyPressEvent(event)
-
-
-
-class GameData(object):
-    def __init__(self):
-        self.speed_level = 3
-
-
-
-class Snake2(Game):
+class Snake2(game.Game):
     TITLE = 'SNAKE II'
-    WIDTH = 452
-    HEIGHT = 324
+
+    PIXEL = 2
+
+    SCREEN_WIDTH = 101
+    SCREEN_HEIGHT = 82
+
+    WIDTH = (PIXEL + 1) * SCREEN_WIDTH
+    HEIGHT = (PIXEL + 1) * SCREEN_HEIGHT
 
     BACKGROUND_COLOUR = (128, 175, 1)
 
+    SPLASH = 'splash'
     MENU = 'menu'
-    TITLE = 'title'
     ARENA = 'arena'
      
     def __init__(self):
-        Game.__init__(self)
-        
-        self.setBackgroundColor(*self.BACKGROUND_COLOUR)
+        super(Snake2, self).__init__()
 
-        self.registered_level_types = {}
-        self.levels = {}
+        # setup game data
+        #
+        self.data['pixel_width'] = self.PIXEL + 1
+        self.data['speed_level'] = 5
+        self.data['game_mode'] = 0
 
         # register level types
         #
-        self.register(self.TITLE, Title)
+        self.register(self.SPLASH, Splash)
         self.register(self.MENU, Menu)
         self.register(self.ARENA, Arena)
 
         # add levels
         #
-        main_title = self.addLevel(self.TITLE)
+        start_screen = self.addLevel(self.SPLASH)
         main_menu = self.addLevel(self.MENU)
         level_menu = self.addLevel(self.MENU)
         arena = self.addLevel(self.ARENA)
 
         # connect levels together
         #
-        self.addConnection(main_title, 0, main_menu)
+        self.addConnection(start_screen, 0, main_menu)
 
         self.addConnection(main_menu, 0, arena)
         self.addConnection(main_menu, 1, level_menu)
 
         self.addConnection(level_menu, 0, main_menu)
 
+        # setup splash screen
+        #
+        start_screen.initialize(images.title)
+
         # setup menus
         #
         menu_items = [('New Game', 0),
                       ('Level', 1),
                       ('High Scores', 1),
+                      ('Options', 1),
+                      ('Options', 1),
+                      ('Options', 1),
+                      ('Options', 1),
                       ('Options', 1)]
         main_menu.initialize(menu_items)
 
@@ -171,78 +88,63 @@ class Snake2(Game):
                       ('Fast', 0),
                       ('Fastest', 0)]
         level_menu.initialize(menu_items)
-            
-# ------------------------------------------------------------------------------------------------ #
-
-class Level(qw.QWidget):
-    id = 0
-    
-    def __init__(self):
-        qw.QWidget.__init__(self)        
-        self.width, self.height = 452, 324
-        self.id = Level.id
-        Level.id += 1
-
-
-    def reset(self):
-        pass
-
-
-    def start(self):
-        pass
-
-
-    def end(self):
-        pass
-
-
-    def switch(self, index):
-        self.emit(qc.SIGNAL('switchLevel(int, int)'), self.id,  index)
         
 # ------------------------------------------------------------------------------------------------ #
 
-def new_uncompress(image_str, width):
-    lines = []
-    for line in image_str.split('-'):
-        lines.append(int(line, 16))
-    return lines
+class SnakeLevel(game.Level):
+    def paintPixels(self, image, painter, x, y, invert=False):
+        '''Generic paint function for any grid.'''
 
-TITLE_IMAGE = (95, 76, \
-'700001800000000000001800-4f8003c00060100000003c00-40f803f080701c0780003f00-400fc7f9c07c3f07c0e03'\
-'f80-40007ffbe07e3f87c0fc7fc0-78000ff7e07e3f87c0fc7fe0-7c60027bf0fc3fc7e1fc7ff0-c7c023df8fc3fc3e1'\
-'fc3ff8-c7c060efce07fe3e3fc07f8-c4c7c0f7ee87be3e3fe03fc-c4c780f7fee79e3e3fe00fc-c4c408f3fdff9f3e7'\
-'fe007e-c4c41ef1fdff1f3e7bc003e-c4c41fe0fdff0fbefb9f81f-c4c403e0fc7f8fbef3bff9f-7c4c401e1ff1fefbf'\
-'f3bffff-4c4c471c3ff1fffbfe3bffff-403c479c7ff3fffdfc3bf07e-400c47fcfdf3e3fdfc3bf800-780073f8f9f3e'\
-'07df83dfc00-7f000cf871e0407c383dfe00-fe0047821ef007f003eff80-1fc04100109c03f000f7fe0-3f8c0000786'\
-'00800033ffc-7f8000fc73de000001ffc-f00018018630000007fc-20001001c8d0000001fc-3005a1b000000078-21e'\
-'215afff000018-60b0cc7555e00000-4180001eaabc0000-61000003d5578000-1ffc007ffeaaaf000-f547f8800fd55'\
-'5800-1aac04e00187eaac00-3556065807003d5600-ffebf034ffa00e7fa00-3803c181d0d200b7ae00-70e00070c0e0'\
-'d400dd7700-8c80001c6060d8006b8b00-10707f8063030e000d715c0-21b0ebf031818b003ffaaf0-4320b59c18c0c8'\
-'bffd7d558-87e1ab760c60642aaeaafac-8f21751b063030355555dd4-3086bebc58218183aaaaabec-51be5f5f6c30c'\
-'0c1d5555554-519faffe261060617effabac-21c1ffe1621030312393ff54-23a80002c6179818a093feb8-63d600054'\
-'c17cc086f57fd70-43ef807e9837e60d0827eb80-47d4ffc53067f304fb1fd700-47ea000260cff906faafac40-47d50'\
-'004c19ff982f26359f8-47ec0009933ff182f7f6b3fe-4737c0f1167fc782f57d67ff-466a7f8b0c781c82f6facfff-2'\
-'4b480120703f006f3f59fff-1f1a000a01fe000cf9f73fff-4007c0fb00000019fc603ffe-7ff07f81800000f3fcefff'\
-'f8-fff003cf0000f87f9efffc0-fffffe1ffff83ffa5ffc00-0-0-0-0-1ddd5c3bbbb8000000-1449c4088aa8000000-'\
-'1cc9cc3bbbb8000000-c4944220988000000-15c95c3bba88000000-0-0-0')
+        pixel = self.data['pixel_width']
 
-class Title(Level):
-    title_image = new_uncompress(TITLE_IMAGE[2], TITLE_IMAGE[0])
-    
+        x *= pixel
+        y *= pixel
+
+        for i in range(image.height):
+            line = image.lines[i]
+            check = 1 << (image.width - 1)
+            for j in range(image.width):
+                paint = bool(line & check)
+                if invert:
+                    paint = not paint
+
+                if paint:
+                    gx = x + (j * pixel) + 1 + j
+                    gy = y + (i * pixel) + 1 + i
+                    painter.drawRect(gx, gy, pixel-1, pixel-1)
+                check >>= 1
+
+
+class Splash(SnakeLevel):
     def __init__(self):
-        Level.__init__(self)
-        
-        self.x_offset = (self.width - (TITLE_IMAGE[0] * 4)) / 2
-        self.y_offset = (self.height - (TITLE_IMAGE[1] * 4)) / 2
+        super(Splash, self).__init__()
+        self.image = None
+        self.offset = (0, 0)
+
+
+    def initialize(self, image):
+        self.image = image
+
+        pixel_width = self.data['pixel_width'] + 1
+
+        x_offset = (self.data['width'] - (self.image.width * pixel_width)) / 2
+        y_offset = (self.data['height'] - (self.image.height * pixel_width)) / 2
+        self.offset = (x_offset, y_offset)
+
+        print self.data['width'], (self.image.width * pixel_width)
+        print self.data['height'], (self.image.height * pixel_width)
+
     
-    
-    def paintEvent(self, event):
+    def paintEvent(self, _):
+        if self.image is None:
+            return
+
         painter = qw.QStylePainter(self)
         option = qw.QStyleOption()
         option.initFrom(self)
      
-        x = option.rect.x() + self.x_offset
-        y = option.rect.y() + self.y_offset
+        x = option.rect.x() + self.offset[0]
+        y = option.rect.y() + self.offset[1]
         
         for color in (MAIN_BRUSHES, SHADOW_BRUSHES):
             x += 1
@@ -251,24 +153,25 @@ class Title(Level):
             painter.setPen(color[0])
             painter.setBrush(color[1])
 
-            drawImage(painter, x, y, TITLE_IMAGE)
+            self.paintPixels(self.image, painter, x, y)
 
 
-    def keyPressEvent(self, event):
+    def keyPressEvent(self, _):
         self.switch(0)
                     
 # ------------------------------------------------------------------------------------------------ #  
 
-class Menu(Level):
+class Menu(SnakeLevel):
     menu_id = 0
     
     def __init__(self):
-        Level.__init__(self)
+        super(Menu, self).__init__()
+
         self.menu_id = Menu.menu_id
         Menu.menu_id += 1
         
-        self.menu_item_width = 100
-        self.menu_item_height = 16
+        self.menu_item_width = 103
+        self.menu_item_height = 17
                 
         self.selected_index = 0
         
@@ -278,7 +181,10 @@ class Menu(Level):
                 
     
     def initialize(self, menu_items):
-        '''Setup the menu with given items and signal connections. Should be pairs of text:signal_id.'''
+        '''
+        Setup the menu with given items and signal connections. Should be pairs of
+        text:signal_id.
+        '''
 
         self.menu_items = []
         self.menu_signals = []
@@ -289,17 +195,10 @@ class Menu(Level):
         for menu_item_name, signal_id in menu_items:
             self.menu_items.append(menu_item_name)
             self.menu_signals.append(signal_id)
-
-            grids = [[0 for _ in range(self.menu_item_width)] for _ in range(16)]
-            self.menu_item_grids[menu_item_name] = grids
-             
-            indent = [4, 3]
-            for letter in menu_item_name:
-                letter_grid = font[letter]
-                grid_width = letter_grid[0]
-                for i, row in enumerate(letter_grid):
-                    grids[i + indent[1]][indent[0]:indent[0]+grid_width] = row
-                indent[0] += grid_width + 1
+            menu_item_image = font.main_font.getImage(menu_item_name,
+                                                      width=self.menu_item_width,
+                                                      height=self.menu_item_height)
+            self.menu_item_grids[menu_item_name] = menu_item_image
                 
                 
     def keyPressEvent(self, event):
@@ -345,8 +244,8 @@ class Menu(Level):
                 if i == self.selected_index:
                     invert = True
                     
-                drawImage(painter, x, w_y, menu_item_grid, invert)
-                
+                self.paintPixels(menu_item_grid, painter, x, w_y, invert)
+
                 w_y += 16 * 4
                     
 # ------------------------------------------------------------------------------------------------ #
@@ -356,11 +255,12 @@ DOWN = (0, 1)
 LEFT = (-1, 0)
 RIGHT = (1, 0)
 
-class Arena(Level):
+class Arena(SnakeLevel):
     GAME_OVER = 'GAME OVER'
     
     def __init__(self):
-        Level.__init__(self)
+        super(Arena, self).__init__()
+
         self.setLayout(qw.QVBoxLayout())
         self.layout().setContentsMargins(10,10,10,10)
         self.layout().setSpacing(0)
@@ -369,7 +269,7 @@ class Arena(Level):
         
         self.grid = Grid(self.width/16-2, self.height/16-4)
         
-        self.snake_speed = 100
+        self.snake_speed = 40
         
         self.score_board = ScoreBoard(self.width/16-2)
         self.layout().addWidget(self.score_board)
@@ -382,7 +282,7 @@ class Arena(Level):
         self.reset()
     
     
-    def reset(self):     
+    def reset(self):
         self.direction = RIGHT
         self.next_direction = RIGHT
         self.position = [8, 6]
@@ -587,7 +487,7 @@ class Arena(Level):
             w_y = y
             for score_text in self.score_text[0:2]:
                 text_grid = self.score_text_grids[score_text]               
-                drawImage(painter, x, w_y, text_grid)                
+                paint(painter, x, w_y, text_grid)
                 w_y += 16 * 4
                 
             score_str = '{:04d}'.format(self.score_board.score_counter)
@@ -595,7 +495,7 @@ class Arena(Level):
             sx = x
             for index in range(4):
                 score_grid = font[score_str[index]]               
-                drawImage(painter, sx, w_y, score_grid)
+                paint(painter, sx, w_y, score_grid)
                 sx += (len(score_grid[0]) + 1) * 4
         
     
@@ -673,17 +573,6 @@ class GameGrid(qw.QWidget):
     
     def __del__(self):
         print 'deleting game grid'
-
-# ------------------------------------------------------------------------------------------------ #
-        
-def drawImage(painter, x, y, image, invert=False):
-    for line in image[1]:
-        check = 1
-        for i in range(image[0]):
-            if line & check:
-                gx, gy = x + (i * 3) + 1 + i, y + (i * 3) + 1 + i
-                painter.drawRect(gx, gy, 2, 2)
-            check <<= 1
 
 # ------------------------------------------------------------------------------------------------ #
 
@@ -883,140 +772,6 @@ class Block(object):
             return Block.DRAW[Block.HEAD_OPEN][direction]        
 
         return Block.DRAW[self.type][direction]
-    
-# ------------------------------------------------------------------------------------------------ #
-
-def compress(image_str):
-    lookup = {'0':'!', '1':'-'}
-    output = []
-    previous_letter = image_str[0]
-    letter_count = 1
-    image_str += '|'
-    for letter in image_str[1:]:
-        if letter == previous_letter:
-            letter_count += 1
-            continue
-        
-        if letter_count == 1:
-            output.append(lookup[previous_letter])
-        else:
-            output.append(lookup[previous_letter])
-            output.append(str(letter_count))
-            
-        previous_letter = letter
-        letter_count = 1
-    
-    return ''.join(output)
-
-
-def uncompress(image_str):
-    lookup = {'!':'0', '-':'1','&':'2'}
-    current_number = ''
-    counter_str = '1'
-    image_str += '&'
-    
-    output = []
-    for letter in image_str:
-        number = lookup.get(letter, None)
-        if number is None:
-            counter_str += letter
-        else:
-            output.append(current_number * int(counter_str if counter_str != '' else '1'))
-            
-            current_number = number            
-            counter_str = ''
-            
-    return ''.join(output)
-
-
-def splitLetters(keys, font_str, font_width):    
-    font_str = uncompress(font_str)
-    font = []
-    for i in range(len(font_str) / font_width):
-        line = font_str[i*font_width:(i+1)*font_width]
-        font.append([int(num) for num in line])
-        
-    break_points = [0]
-    for i in range(len(font[0])):
-        break_line = True
-        for j in range(len(font)):
-            if font[j][i] != 0:
-                break_line = False
-    
-        if break_line:    
-            break_points.append(i)        
-    break_points.append(-1)
-    
-    all_grids = {}
-    for index, key in enumerate(keys):
-        all_grids[key] = grid = []
-        for i in range(len(font)):
-            j, k = break_points[index], break_points[index+1]
-            j = j if j == 0 else (j + 1)
-            grid.append(font[i][j:k])
-     
-    return all_grids
-
-# ------------------------------------------------------------------------------------------------ #    
-
-title_width, title_height = 95, 77
-
-font_lower_width, font_lower_height = 166, 11
-font_lower = \
-'!7-2!16-2!10-2!8-2!5-2!2-2!-2!5-2!51-2!50-2!16-2!9-2!9-2!12-2!5-2!51-2!44-4!2-5!3-4!3-5!2-4!2-4!'\
-'2-4!2-5!2-2!2-2!-2!2-2!-2!-7!2-5!3-4!2-5!3-4!2-2!-2!2-4!-4!-2!2-2!-2!2-2!-2!3-2!-2!2-2!-2!2-2!-5'\
-'!4-2!-2!2-2!-2!2-2!-2!2-2!-2!2-2!2-2!2-2!2-2!-2!2-2!-2!2-2!-2!-2!2-2!-2!-2!-2!-2!2-2!-2!2-2!-2!2'\
-'-2!-2!2-2!-5!-2!5-2!2-2!2-2!-2!2-2!-2!3-2!-2!2-2!-2!2-2!3-2!2-5!-2!2-2!-2!5-2!2-2!-2!2-2!2-2!2-2'\
-'!2-2!-2!2-2!-2!2-2!-4!3-2!-2!-2!-2!-2!2-2!-2!2-2!-2!2-2!-2!2-2!-2!4-2!5-2!2-2!2-2!-2!2-2!-2!3-2!'\
-'-2!2-2!-2!2-2!3-2!-2!2-2!-2!2-2!-2!5-2!2-2!-6!2-2!2-2!2-2!-2!2-2!-2!2-2!-3!4-2!-2!-2!-2!-2!2-2!-'\
-'2!2-2!-2!2-2!-2!2-2!-2!5-3!3-2!2-2!2-2!-2!2-2!-2!-!-2!2-4!2-2!2-2!2-2!2-2!2-2!-2!2-2!-2!5-2!2-2!'\
-'-2!6-2!2-2!2-2!-2!2-2!-2!2-2!-4!3-2!-2!-2!-2!-2!2-2!-2!2-2!-2!2-2!-2!2-2!-2!7-2!2-2!2-2!2-2!2-!2'\
-'-!2-2!-!-2!-6!-2!2-2!2-2!2-2!2-2!-2!2-2!-2!2-2!-2!2-2!-2!2-2!2-2!2-2!2-2!-2!2-2!-2!2-2!-2!-2!2-2'\
-'!-2!-2!-2!-2!2-2!-2!2-2!-2!2-2!-2!2-2!-2!7-2!2-2!2-2!2-2!2-4!3-5!2-2!2-2!-2!2-2!-2!4-5!-5!3-4!3-'\
-'5!2-4!3-2!3-5!-2!2-2!-2!-2!2-2!2-2!-2!-2!-2!-2!-2!2-2!2-4!2-5!3-5!-2!4-4!4-2!2-5!3-2!4-2!-2!2-2!'\
-'2-2!2-5!-5!44-2!48-2!9-2!51-2!47-4!49-2!9-2!48-4!7'
-
-font_upper_width, font_upper_height = 174, 11
-font_upper = \
-'!-4!2-5!3-4!2-5!2-5!-5!2-4!2-2!2-2!-2!3-2!-2!2-2!-2!3-!5-!-!4-2!2-4!2-5!3-4!2-5!3-4!2-6!-2!2-2!-'\
-'2!2-2!-2!3-2!-2!2-2!-2!2-2!-8!2-2!-2!2-2!-2!2-2!-2!2-2!-2!4-2!4-2!2-2!-2!2-2!-2!3-2!-2!2-2!-2!3-'\
-'2!3-2!-2!3-2!-2!2-2!-2!2-2!-2!2-2!-2!2-2!-2!2-2!3-2!3-2!2-2!-2!2-2!-2!3-2!-2!2-2!-2!2-2!4-2!-2!2'\
-'-2!-2!2-2!-2!5-2!2-2!-2!4-2!4-2!5-2!2-2!-2!3-2!-2!2-2!-2!3-3!-3!-3!2-2!-2!2-2!-2!2-2!-2!2-2!-2!2'\
-'-2!-2!7-2!3-2!2-2!-2!2-2!-2!3-2!2-4!2-2!2-2!4-2!-2!2-2!-2!2-2!-2!5-2!2-2!-4!2-4!2-2!5-2!2-2!-2!3'\
-'-2!-2!2-2!-2!3-7!-4!-2!-2!2-2!-2!2-2!-2!2-2!-2!2-2!-2!7-2!3-2!2-2!-2!2-2!-2!-!-2!2-4!2-2!2-2!3-2'\
-'!2-6!-5!2-2!5-2!2-2!-2!4-2!4-2!5-6!-2!3-2!-5!2-2!3-2!-!-2!-7!-2!2-2!-5!2-2!2-2!-5!3-4!4-2!3-2!2-'\
-'2!-2!2-2!-2!-!-2!3-2!4-4!4-2!2-2!2-2!-2!2-2!-2!5-2!2-2!-2!4-2!4-2!-3!-2!2-2!-2!3-2!-2!2-2!-2!3-2'\
-'!3-2!-2!-4!-2!2-2!-2!5-2!2-2!-2!2-2!5-2!3-2!3-2!2-2!-2!2-2!-7!2-4!4-2!4-2!3-2!2-2!-2!2-2!-2!5-2!'\
-'2-2!-2!4-2!4-2!2-2!-2!2-2!-2!3-2!-2!2-2!-2!3-2!3-2!-2!2-3!-2!2-2!-2!5-2!2-2!-2!2-2!5-2!3-2!3-2!2'\
-'-2!2-4!3-5!3-4!4-2!4-2!3-2!2-2!-2!2-2!-2!2-2!-2!2-2!-2!4-2!4-2!2-2!-2!2-2!-2!3-2!-2!2-2!-2!3-2!3'\
-'-2!-2!3-2!-2!2-2!-2!5-2!-3!-2!2-2!-2!2-2!3-2!3-2!2-2!2-4!3-5!2-2!2-2!3-2!3-2!4-2!2-2!-5!3-4!2-5!'\
-'2-5!-2!5-4!2-2!2-2!-2!-3!2-2!2-2!-4!-2!3-2!-2!4-!2-4!2-2!6-4!2-2!2-2!2-4!4-2!4-4!4-2!4-2!-2!2-2!'\
-'2-2!3-2!3-6!108-2!238'
-
-font_numbers_width, font_number_height = 70, 11
-font_numbers = \
-'!-4!3-2!3-4!3-4!6-2!2-6!2-4!2-6!2-4!3-4!3-2!2-2!-3!2-2!2-2!-2!2-2!4-3!2-2!5-2!2-2!-2!2-2!-2!2-2'\
-'!-2!2-2!2-2!2-2!2-2!2-2!2-2!-2!2-2!3-4!2-2!5-2!9-2!-2!2-2!-2!2-2!2-2!2-2!2-2!2-2!2-2!5-2!2-2!-2'\
-'!2-5!2-5!6-2!-2!2-2!-2!2-2!2-2!2-2!2-2!5-3!3-3!3-!2-2!6-2!-2!2-2!4-2!3-4!2-2!2-2!2-2!2-2!2-2!4-'\
-'3!6-2!-2!2-2!6-2!-2!2-2!3-3!2-2!2-2!2-5!2-2!2-2!2-2!3-3!3-2!2-2!-2!2-2!2-2!2-2!-2!2-2!3-2!3-2!2'\
-'-2!5-2!2-2!2-2!2-2!2-3!4-2!2-2!-7!-2!2-2!-2!2-2!3-2!3-2!2-2!-2!2-2!3-4!2-4!-6!2-4!6-2!3-4!3-4!4'\
-'-2!4-4!3-4!143'
-
-font_symbols_width, font_symbols_height = 49, 11
-font_symbols = \
-'!6-2!2-4!5-2!-2!10-2!-2!2-3!-3!7-2!-2!2-2!4-2!-2!10-2!-2!-2!5-4!-2!-2!-2!2-2!4-2!-2!10-2!2-!-2!'\
-'5-4!-2!-2!5-2!3-2!3-2!9-2!4-2!5-2!6-2!3-3!4-2!3-2!9-2!4-2!5-2!6-2!3-2!4-2!5-2!8-2!4-2!5-4!-2!12'\
-'-2!5-2!8-2!4-2!5-4!-2!-2!3-2!3-2!7-2!-2!-2!-2!4-2!5-2!4-!-2!3-2!3-2!7-2!-2!-2!-2!5-3!-3!30-!68'
-symbols = ':',';','!','?','/','\\','.',',','|','\'','(',')'
-
-font = splitLetters([chr(index + 97) for index in range(26)], font_lower, font_lower_width)
-font.update(splitLetters([chr(index + 65) for index in range(26)], font_upper, font_upper_width))
-font.update(splitLetters([str(index) for index in range(10)], font_numbers, font_numbers_width))
-font.update(splitLetters(symbols, font_symbols, font_symbols_width))
-font[' '] = [[0 for _ in range(4)] for _ in range(11)]
-font['"'] = font['\'']
-font['{'] = font['['] = font['(']
-font['}'] = font[']'] = font['('] 
 
 # ------------------------------------------------------------------------------------------------ #
 
@@ -1041,95 +796,18 @@ def delete():
     ui = None
 
 
-# font_lower_width, font_lower_height = 166, 11
-# font_lower = \
-# test = '!6-2!2-4!5-2!-2!10-2!-2!2-3!-3!7-2!-2!2-2!4-2!-2!10-2!-2!-2!5-4!-2!-2!-2!2-2!4-2!-2!10-2!2-!-2!'\
-# '5-4!-2!-2!5-2!3-2!3-2!9-2!4-2!5-2!6-2!3-3!4-2!3-2!9-2!4-2!5-2!6-2!3-2!4-2!5-2!8-2!4-2!5-4!-2!12'\
-# '-2!5-2!8-2!4-2!5-4!-2!-2!3-2!3-2!7-2!-2!-2!-2!4-2!5-2!4-!-2!3-2!3-2!7-2!-2!-2!-2!5-3!-3!30-!68'
-#
-# uncompressed_image = uncompress(test)
-#
-# prev = 0
-# new_image = []
-# for i in range(font_lower_width, len(uncompressed_image), font_lower_width):
-#     new_image.append(hex(int(uncompressed_image[prev:i], 2))[2:-1])
-#     prev = i
-# print '-'.join(new_image)
-
-font_lower_width = 166
-font_lower = '600018018060cd83000000000000180000000000-6000180300600183000000000000180000000000-1e7c7' \
-             '8f9e79e7ccd9b7f3e3cf8f367bd9b36366cdf-366cd9b333366cdb36db366cd9bec199b36366cc6-1f66c19' \
-             'b333366cde36db366cd9b0c199b36366cc6-3366c19bf33366cdc36db366cd9b07199b36b3cccc-3366c19b' \
-             '033366cde36db366cd9b01999926b7eccc-3366cd9b333366cdb36db366cd9b019999e3e66cd8-1f7c78f9e' \
-             '31f66d99b6db33cf8fb0f0cf8c36667df-3000000000000c018000000000000c0'
-
-font_upper_width = 174
-font_upper = '1e7c79f3ef9e66c6cd8828679f1e7c79fb366c6cd9bf-3366cd9b0c3366c6cd8c6c6cd9b366cc63366c6cd9' \
-             '86-3366c19b0c3066c6cd8eee6cd9b366c063366c679986-3366c19bcf3066c6cd8fef6cd9b366c063366d6' \
-             '7998c-3f7cc19b0c307ec6f98d6fecdf337c7863366d630f0c-3366c19b0c3766c6cd8c6decd833660c6336' \
-             '6fe78618-3366c19b0c3366c6cd8c6cecd833660c6333c7c78618-3366cd9b0c3366c6cd8c6c6cd83766cc6' \
-             '333c7ccc630-337c79f3ec1e66dccdec6c27981e667861e186ccc63f-30000000000000000'
-
-font_numbers_width = 70
-font_numbers = '1e31e3c0cfcf3f3c78cdccd9873066cd9b33333366-f30600d9b333333066cf9f0366ccccc1c71303661-' \
-               '23cccccc381b303663999f3331c66cccd98c660ccc-33866fecd98c66cc79efcf031e3c30f1e000000000'
-
-font_symbols_width = 49
-font_symbols = 'cf06c00d9dc06cc36006d83db661b0032c1ed831-23006183031c318030c1818c30601860f60018300c-c' \
-               '1ed8c6036d860c2c6301b6c1dc00000008000000'
-
-
-
-def uncompress_image(image_str, width):
-    lines = []
-    for line in image_str.split('-'):
-        lines.append(int(line, 16))
-    return width, lines
-
-
-def split(image):
-    split_images = []
-    binary_lines = [bin(line)[2:].zfill(image[0]) for line in image[1]]
-
-    check = 1
-    counter = image[0] - 1
-    prev_counter = image[0]
-    for i in range(image[0]):
-        split_line = True
-        for line in image[1]:
-            if line & check:
-                split_line = False
-        check <<= 1
-
-        if split_line is True or i == image[0] - 1:
-            width = prev_counter - counter - (0 if i == image[0] - 1 else 1)
-            split_images.append([width, [int(binary_line[counter:prev_counter], 2) for binary_line in binary_lines]])
-            prev_counter = counter
-        counter -= 1
-
-    return split_images[::-1]
-
-
-def draw(image, x, y, painter, invert=False):
-    for line in image[1]:
+def draw(image):
+    image_str = []
+    for line in image.lines:
         check = 1
         line_str = []
-        for _ in range(image[0]):
+        for _ in range(image.width):
             if line & check:
-                line_str.append('H')
+                line_str.append('#')
             else:
-                line_str.append('-')
-            check <<= 1
+                line_str.append(' ')
+            check = check << 1
+        image_str.append(''.join(line_str)[::-1])
+    print '\n'.join(image_str)
 
-        print ''.join(line_str[::-1])
 
-# font_upper_image = uncompress_image(font_upper, font_upper_height)
-# display(font_upper_image)
-# split_images = split(image)
-# for split_image in split_images:
-#     display(split_image)
-
-#font = dict(zip([chr(index + 97) for index in range(26)], split(uncompress_image(font_lower, font_lower_width))))
-#font.update(dict(zip([chr(index + 65) for index in range(26)], split(uncompress_image(font_upper, font_upper_width)))))
-
-print font

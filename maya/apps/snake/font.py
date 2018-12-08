@@ -1,3 +1,5 @@
+from cg_inventor.maya.apps.snake.images import Image
+
 class Font(object):
     def __init__(self, data, height):
         self.height = height
@@ -11,15 +13,46 @@ class Font(object):
             self._data[letter] = [bin_str[i * width:(i + 1) * width] for i in range(height)]
 
 
-    def __getitem__(self, text):
-        grid = ['' for _ in range(self.height)]
-        for letter in text:
+    def getImage(self, text, width=None, height=None):
+        height = height if isinstance(height, int) else self.height
+
+        # calculate offsets to fill width/height
+        #
+        top_offset = base_offset = (height - self.height) / 2
+        if (top_offset + base_offset + self.height) != height:
+            top_offset += 1
+
+        # compose new gris from text
+        #
+        grid = ['' + '0' * base_offset for _ in range(self.height)]
+        for letter_index, letter in enumerate(text):
             letter_grid = self._data.get(letter, ' ')
             for i, row in enumerate(letter_grid):
                 grid[i] += row
-                if letter != text[-1]:
+                if letter_index != len(text)-1:
                     grid[i] += '0'
-        return len(grid[0]), [int(i, 2) for i in grid]
+
+        width = width if isinstance(width, int) else len(grid[0])
+        right_offset = width - (base_offset + len(grid[0]))
+        for _ in range(right_offset):
+            for i in range(len(grid)):
+                grid[i] += '0'
+
+        # create image
+        #
+        new_image = Image()
+        new_image.lines = [int(i, 2) for i in grid]
+        new_image.width = len(grid[0])
+        new_image.height = height
+
+        # add top/base offsets
+        #
+        for i in range(top_offset):
+            new_image.lines.insert(0, 0)
+        for i in range(base_offset):
+            new_image.lines.append(0)
+
+        return new_image
 
 
 
